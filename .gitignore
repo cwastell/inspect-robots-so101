@@ -18,6 +18,11 @@ htmlcov/
 .mypy_cache/
 .ruff_cache/
 
+# Local observations, action traces and proof artifacts are not public source.
+logs/
+captures/
+diagnostics/
+
 # Secrets / env
 .env
 .env.*

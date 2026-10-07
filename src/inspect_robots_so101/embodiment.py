@@ -44,6 +44,7 @@ from inspect_robots.types import OPERATOR_END, Action, Observation, StepResult
 from inspect_robots_so101 import packing
 from inspect_robots_so101.config import SOArmConfig, action_box, observation_space
 from inspect_robots_so101.operator import OperatorIO, default_poll_end
+from inspect_robots_so101.rgbd import RGBDSnapshot
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -69,6 +70,9 @@ class SOArmDriver(Protocol):
     Satisfied directly by ``lerobot.robots.so_follower.SOFollower`` (and any other
     LeRobot ``Robot``): observations are dicts of ``"<motor>.pos"`` floats plus
     camera frames keyed by camera name; actions are dicts of ``"<motor>.pos"``.
+    An injected RGB-D driver may return an immutable :class:`RGBDSnapshot`
+    instead of an RGB array for a camera. The default LeRobot driver is
+    unchanged and does not construct these snapshots.
     """
 
     def get_observation(self) -> Mapping[str, Any]:
@@ -383,7 +387,20 @@ class SOArmEmbodiment:
         observed_at = self._clock()
         state = packing.from_obs_dict(raw)
         self._last_state = state
-        images = {cam: np.asarray(raw[cam], dtype=np.uint8) for cam in self._cfg.cameras}
+        images: dict[str, npt.NDArray[np.uint8]] = {}
+        image_times: dict[str, float] = {}
+        extra: dict[str, Any] = {}
+        for cam in self._cfg.cameras:
+            frame = raw[cam]
+            if isinstance(frame, RGBDSnapshot):
+                images[cam] = frame.rgb
+                # This is the packet's host receipt time, not exposure time.
+                # Do not pair RGB with a later lazy read of the depth stream.
+                image_times[cam] = frame.received_at_s
+                extra.update(frame.observation_extra(cam))
+            else:
+                images[cam] = np.asarray(frame, dtype=np.uint8)
+                image_times[cam] = observed_at
         expected = (self._cfg.cam_height, self._cfg.cam_width, 3)
         for name, img in images.items():
             if img.shape != expected:
@@ -392,6 +409,7 @@ class SOArmEmbodiment:
             images=images,
             state={packing.STATE_KEY: state},
             instruction=instruction,
-            image_times=dict.fromkeys(self._cfg.cameras, observed_at),
+            image_times=image_times,
             state_time=observed_at,
+            extra=extra,
         )

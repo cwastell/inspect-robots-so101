@@ -237,6 +237,17 @@ timeout can make a step take longer than one control period.
 
 ## Development
 
+### RGBD fork proof
+
+This fork adds SDK-free `RGBDSnapshot` observations for injected SO-ARM drivers.
+RGB, metric depth, native point correspondences, calibration and timestamps
+stay bound to one captured frame pair. Existing RGB-only drivers are unchanged.
+
+The first proof uses saved RealSense data and a fake motor driver. It does not
+enable a live camera, Cartesian motion, autonomous grasping or training-data
+collection. See [RGBD observations and offline proof](docs/realsense.md) for the
+interface, tests and remaining integration work.
+
 > **Dependency changes:** after editing dependencies in `pyproject.toml`, run
 > `uv lock` and commit the updated lockfile: CI installs with
 > `uv sync --locked` and fails with "the lockfile needs to be updated" if you
